@@ -14,7 +14,14 @@
 #define HEIGHT 60
 
 // Number of cores to use on each chip
-#define CORES_PER_CHIP 1
+#define CORES_PER_CHIP 16
+
+// Include a payload
+#define USE_PAYLOAD 1
+
+// Router wait periods
+#define WAIT1 0x00
+#define WAIT2 0x00
 
 // Timer for master sending out requests (us)
 #define MASTER_TIMER_TICK 1000
@@ -137,11 +144,18 @@ volatile uint recv_time;
 
 /**
  * Initialise the routing tables on this chip with a naive 0,0 to any, any to
- * 0,0 routing scheme.
+ * 0,0 routing scheme. Also set up the timeouts.
  */
 void
 setup_routing_tables(void)
 {
+	// Set router timeout
+	volatile uint *control_reg = (uint*)(RTR_BASE+RTR_CONTROL);
+	uint control = *control_reg;
+	control &= 0xFFFF;
+	control |= (WAIT2<<24) | (WAIT1<<16);
+	*control_reg = control;
+	
 	uint entry;
 	
 	uint xyz[3] = {
@@ -214,14 +228,7 @@ setup_routing_tables(void)
 void
 bounce_mc_packet(uint key, uint _1)
 {
-	spin1_send_mc_packet( XYPD_TO_KEY(0,0,1,KEY_TO_D(key))
-	                    , XYPD_TO_KEY( KEY_TO_X(key)
-	                                 , KEY_TO_Y(key)
-	                                 , KEY_TO_Z(key)
-	                                 , KEY_TO_D(key)
-	                                 )
-	                    , 1
-	                    );
+	spin1_send_mc_packet(XYPD_TO_KEY(0,0,1,KEY_TO_D(key)), 0, USE_PAYLOAD);
 	io_printf(IO_BUF, "Returning bounce from %08x\n", key);
 }
 
@@ -268,8 +275,8 @@ on_tick(uint _1, uint _2)
 	// Send an empty packet to the remote to ping back
 	uint key = XYPD_TO_KEY(dest_x,dest_y,dest_p, dest_dim_order);
 	got_reply = 0;
+	spin1_send_mc_packet(key, 0, USE_PAYLOAD);
 	send_time = tc2[TC_COUNT];
-	spin1_send_mc_packet(key, 0, 1);
 }
 
 
@@ -290,7 +297,10 @@ c_main() {
 	if (my_x == 0 && my_y == 0 && my_p == 1) {
 		spin1_set_timer_tick(MASTER_TIMER_TICK);
 		spin1_callback_on(TIMER_TICK, on_tick, 0);
-		spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 1);
+		if (USE_PAYLOAD)
+			spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 1);
+		else
+			spin1_callback_on(MC_PACKET_RECEIVED, on_master_mc_packet, 1);
 		
 		// Set up fine-grained timer for latency measurement
 		tc2[TC_CONTROL] = (0 << 0) // Wrapping counter
@@ -301,7 +311,10 @@ c_main() {
 		                | (1 << 7) // Enabled
 		                ;
 	} else {
-		spin1_callback_on(MCPL_PACKET_RECEIVED, bounce_mc_packet, 1);
+		if (USE_PAYLOAD)
+			spin1_callback_on(MCPL_PACKET_RECEIVED, bounce_mc_packet, 1);
+		else
+			spin1_callback_on(MC_PACKET_RECEIVED, bounce_mc_packet, 1);
 	}
 	spin1_start(TRUE);
 }
