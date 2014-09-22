@@ -94,7 +94,7 @@ count_board_to_board_links <- function( target_x,target_y
 
 
 ################################################################################
-# Data dump loader
+# Latency data dump loader
 ################################################################################
 
 # Read the script's arguments
@@ -147,7 +147,6 @@ read.latencyResults <- function ( filename
 add_c2c_and_b2b <- function (result_frame, count_filename) {
 	return(merge(result_frame, read.csv(count_filename, header=TRUE)))
 }
-
 
 
 ################################################################################

@@ -12,14 +12,10 @@
 #include "dor.c"
 
 // Timer for master sending out requests (us)
-#define MASTER_TIMER_TICK 500
+#define MASTER_TIMER_TICK 1000
 
-// Address in SDRAM to store results
-#define RESULT_ADDR(x,y,p,d) ( ((uint*)SDRAM_BASE_BUF) \
-                               + (( (((x) + ((y)*WIDTH)) * CORES_PER_CHIP) \
-                                  + (p)-1) * NUM_DIM_ORDERS) \
-                               + (d) \
-                             )
+// A lookup table of dimension orders known to work with each remote core
+unsigned char working_dimension_order [WIDTH][HEIGHT][CORES_PER_CHIP];
 
 // The position of this chip in the system
 uint my_x = -1;
@@ -40,7 +36,7 @@ volatile uint key;
 
 // Values to record as results
 volatile int  last_error;
-volatile uint got_ping;
+volatile uint got_ping = TRUE;
 
 // Packet callback on master
 void
@@ -50,7 +46,7 @@ on_master_mc_packet(uint _, uint remote_time)
 	uint recv_time = tc2[TC_COUNT];
 	uint latency = (recv_time - send_time)/2;
 	remote_time += latency;
-	last_error = (int)(tc2[TC_COUNT] - remote_time);
+	last_error = (((int)tc2[TC_COUNT]) - ((int)remote_time));
 	got_ping = TRUE;
 	
 	// Send a correction back
@@ -61,11 +57,19 @@ on_master_mc_packet(uint _, uint remote_time)
 void
 on_tick(uint _1, uint _2)
 {
-	// Store results
-	if (got_ping)
-		*(RESULT_ADDR(dest_x,dest_y,dest_p,dest_dim_order)) = last_error;
-	else
-		*(RESULT_ADDR(dest_x,dest_y,dest_p,dest_dim_order)) = 0xDEADBEEF;
+	static uint num_responses = 0;
+	static uint num_missing = 0;
+	static int total_drift = 0;
+	
+	// Try a different DOR if a ping doesn't make it
+	if (!got_ping) {
+		working_dimension_order[dest_x][dest_y][dest_p] ++;
+		working_dimension_order[dest_x][dest_y][dest_p] %= NUM_DIM_ORDERS;
+		num_missing++;
+	} else {
+		num_responses++;
+		total_drift += (last_error >= 0) ? last_error : -last_error;
+	}
 	
 	// Advance through the system
 	do {
@@ -75,17 +79,22 @@ on_tick(uint _1, uint _2)
 				dest_y = 0;
 				if (++dest_p > CORES_PER_CHIP) {
 					dest_p = 1;
-					if (++dest_dim_order >= NUM_DIM_ORDERS) {
-						dest_dim_order = 0;
-					}
+					
+					io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d.\n"
+					         , num_responses
+					         , num_missing
+					         , total_drift
+					         );
+					num_responses = 0;
+					num_missing = 0;
+					total_drift = 0;
 				}
-				io_printf(IO_BUF, "Next core/dim-order...\n");
 			}
 		}
 	} while (dest_x == 0 && dest_y == 0 && dest_p == 1);
 	
 	// Send an empty packet to the remote to ping back
-	key = XYPD_TO_KEY(dest_x,dest_y,dest_p, dest_dim_order);
+	key = XYPD_TO_KEY(dest_x,dest_y,dest_p, working_dimension_order[dest_x][dest_y][dest_p]);
 	got_ping = FALSE;
 	spin1_send_mc_packet(key, PL_PING_BIT, TRUE);
 	send_time = tc2[TC_COUNT];
@@ -109,6 +118,15 @@ c_main() {
 	spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 1);
 	
 	tc2[TC_CONTROL] = TC_CONFIG;
+	
+	// Initialise DOR lookup
+	for (int x = 0; x < WIDTH; x++)
+		for (int y = 0; y < HEIGHT; y++)
+			for (int p = 0; y < CORES_PER_CHIP; y++)
+				working_dimension_order[x][y][p] = DIM_ORDER_XYZ;
+	
+	// Remove any sentinel in SDRAM left by running the slave...
+	*((uint*)SDRAM_BASE_BUF) = 0;
 	
 	spin1_start(TRUE);
 }

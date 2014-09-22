@@ -7,6 +7,9 @@
 #define SPINN_TIME_COMMON_H
 
 
+// Number of clock updates to perform before exiting
+#define NUM_CORRECTIONS 1000
+
 // Height of the (rectangular) system
 #define WIDTH  96
 #define HEIGHT 60
