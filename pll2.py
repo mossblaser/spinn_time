@@ -26,7 +26,7 @@ master_period = 1.0
 slave_period = 0.90
 
 # Magnitude of wander on the slave clock
-wander_magnitude = 0.0003
+wander_magnitude = 0.0002
 wander_period = 10000.0
 
 # Number of (raw) slave clock ticks between attempts to correct the clock
@@ -39,9 +39,7 @@ slave_update_countdown = slave_update_period
 # time.
 offset = 0
 
-# In a real system, this would be the value correction supplied by the master
-# indicating the difference between the slave's estimate of time and the
-# master's time.
+# This is the actual correction to be applied at the current tick.
 correction = 0
 
 # The frequency relative to (raw) slave ticks between a correction being applied. If
@@ -56,12 +54,13 @@ last_phase_kick = 0
 correction_countdown = 0
 
 # The rate at which frequency corrections get applied
-avg_correction_freq_tc = 1.0
+avg_correction_freq_tc = 0.1
 avg_correction_freq_tc_target = 0.1
 
 # The rate at which phase corrections get applied
-avg_correction_phase_tc = 1.0
+avg_correction_phase_tc = 0.1
 avg_correction_phase_tc_target = 0.1
+
 
 # Link jitter (the standard-deviation of normally distributed noise added to
 # each error measurement)
@@ -108,8 +107,10 @@ def update_slave(sim_time):
 		# Gradually ramp down the tc
 		if avg_correction_freq_tc > avg_correction_freq_tc_target:
 			avg_correction_freq_tc *= 0.9
+			avg_correction_freq_tc = max(avg_correction_freq_tc, avg_correction_freq_tc_target)
 		if avg_correction_phase_tc > avg_correction_phase_tc_target:
 			avg_correction_phase_tc *= 0.9
+			avg_correction_phase_tc = max(avg_correction_phase_tc, avg_correction_phase_tc_target)
 	
 	offset += correction
 event_queue[0.0].append(update_slave)
