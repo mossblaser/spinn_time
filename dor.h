@@ -71,15 +71,17 @@ const uint DIM_DIRECTIONS[3] = {
 
 // Encode/decode the the fields of a routing key. The key is a bit field
 // containing a 3D hexagonal coordinate (x,y,z), a core number (p) and a
-// selected dimension ordering (d).
-#define XYZPD_TO_KEY(x,y,z,p,d) ( ((x)&0xFF)<<24 | ((y)&0xFF)<<16 | ((z)&0xFF)<<8 | ((p)&0x1F)<<3 | ((d)&0x07) )
-#define KEY_TO_X(k) ( ((k) >> 24) & 0xFF )
-#define KEY_TO_Y(k) ( ((k) >> 16) & 0xFF )
-#define KEY_TO_Z(k) ( ((k) >>  8) & 0xFF )
-#define KEY_TO_P(k) ( ((k) >>  3) & 0x1F )
-#define KEY_TO_D(k) ( ((k) >>  0) & 0x07 )
+// selected dimension ordering (d). Note that keys only exist for cores 0-15.
+// The final bit of the key is a "return" bit. If one, the key routes from
+// 0,0,0,1 to the specified core, if the bit is zero, the key routes from the
+// specified core to 0,0,0,1.
+#define XYZPD_TO_KEY(x,y,z,p,d) ( ((x)&0xFF)<<24 | ((y)&0xFF)<<16 | ((z)&0xFF)<<8 | ((p)&0xF)<<4 | ((d)&0x07)<<1 | 1<<0)
+#define KEY_TO_X(k) (((k) >> 24) & 0xFF)
+#define KEY_TO_Y(k) (((k) >> 16) & 0xFF)
+#define KEY_TO_Z(k) (((k) >>  8) & 0xFF)
+#define KEY_TO_P(k) (((k) >>  4) & 0x0F)
+#define KEY_TO_D(k) (((k) >>  1) & 0x07)
 
-// 
 #define XYPD_TO_KEY(x,y,p,d) (XYZPD_TO_KEY( XY_TO_MIN_X((x),(y)) \
                                           , XY_TO_MIN_Y((x),(y)) \
                                           , XY_TO_MIN_Z((x),(y)) \
@@ -87,7 +89,9 @@ const uint DIM_DIRECTIONS[3] = {
                                           , (d) \
                                           ))
 
-
+// Convert a key into the "return" version which routes back to 0,0,0,1
+#define RETURN_KEY(k) (k & ~0x1)
+#define RETURN_MASK(k) (k | 0x1)
 
 
 /**

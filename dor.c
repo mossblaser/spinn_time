@@ -47,9 +47,16 @@ setup_routing_tables(uint my_x, uint my_y, uint cores_per_chip)
 	
 	// Add entries to accept packets destined for this core
 	for (int p = 1; p <= cores_per_chip; p++)
-		ADD_RTR_ENTRY( XYZPD_TO_KEY(xyz[0],xyz[1],xyz[2],   p,0)
-		             , XYZPD_TO_KEY(  0xFF,  0xFF,  0xFF,0x1F,0)
+		ADD_RTR_ENTRY( XYZPD_TO_KEY(xyz[0],xyz[1],xyz[2], p-1,0)
+		             , XYZPD_TO_KEY(  0xFF,  0xFF,  0xFF,0x0F,0)
 		             , CORE(p)
+		             );
+	
+	// Add entry to pick up return packets for the master
+	if (my_x == 0 && my_y == 0)
+		ADD_RTR_ENTRY( RETURN_KEY(XYZPD_TO_KEY(0,0,0,0,0))
+		             , RETURN_MASK(XYZPD_TO_KEY(0,0,0,0,0))
+		             , CORE(1)
 		             );
 	
 	// Add routes which allow dimension-order routing with any dimension order
@@ -76,18 +83,18 @@ setup_routing_tables(uint my_x, uint my_y, uint cores_per_chip)
 			// master.
 			// If the third dimension is not zero, route along it first
 			if (xyz[DIM_ORDERS[dim_order][2]])
-				ADD_RTR_ENTRY( XYZPD_TO_KEY(   0,   0,   0,   1, dim_order)
-				             , XYZPD_TO_KEY(0xFF,0xFF,0xFF,0x1F, 0x07)
+				ADD_RTR_ENTRY( RETURN_KEY(XYZPD_TO_KEY(0,0,0,0,dim_order))
+				             , RETURN_MASK(XYZPD_TO_KEY(0,0,0,0,0x7))
 				             , OPPOSITE(DIM_DIRECTIONS[DIM_ORDERS[dim_order][2]])
 				             );
 			else if (xyz[DIM_ORDERS[dim_order][1]])
-				ADD_RTR_ENTRY( XYZPD_TO_KEY(   0,   0,   0,   1, dim_order)
-				             , XYZPD_TO_KEY(0xFF,0xFF,0xFF,0x1F, 0x07)
+				ADD_RTR_ENTRY( RETURN_KEY(XYZPD_TO_KEY(0,0,0,0,dim_order))
+				             , RETURN_MASK(XYZPD_TO_KEY(0,0,0,0,0x7))
 				             , OPPOSITE(DIM_DIRECTIONS[DIM_ORDERS[dim_order][1]])
 				             );
 			else if (xyz[DIM_ORDERS[dim_order][0]])
-				ADD_RTR_ENTRY( XYZPD_TO_KEY(   0,   0,   0,   1, dim_order)
-				             , XYZPD_TO_KEY(0xFF,0xFF,0xFF,0x1F, 0x07)
+				ADD_RTR_ENTRY( RETURN_KEY(XYZPD_TO_KEY(0,0,0,0,dim_order))
+				             , RETURN_MASK(XYZPD_TO_KEY(0,0,0,0,0x7))
 				             , OPPOSITE(DIM_DIRECTIONS[DIM_ORDERS[dim_order][0]])
 				             );
 		}

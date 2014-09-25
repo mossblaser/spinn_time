@@ -40,8 +40,12 @@ volatile uint got_ping = TRUE;
 
 // Packet callback on master
 void
-on_master_mc_packet(uint _, uint remote_time)
+on_master_mc_packet(uint return_key, uint remote_time)
 {
+	// Reject packets with the wrong key
+	if (RETURN_KEY(key) != return_key)
+		return;
+	
 	// Calculate the approximate error in the remote clock
 	uint recv_time = tc2[TC_COUNT];
 	uint latency = (recv_time - send_time)/2;
@@ -63,8 +67,8 @@ on_tick(uint _1, uint _2)
 	
 	// Try a different DOR if a ping doesn't make it
 	if (!got_ping) {
-		working_dimension_order[dest_x][dest_y][dest_p] ++;
-		working_dimension_order[dest_x][dest_y][dest_p] %= NUM_DIM_ORDERS;
+		working_dimension_order[dest_x][dest_y][dest_p-1] ++;
+		working_dimension_order[dest_x][dest_y][dest_p-1] %= NUM_DIM_ORDERS;
 		num_missing++;
 	} else {
 		num_responses++;
@@ -94,7 +98,7 @@ on_tick(uint _1, uint _2)
 	} while (dest_x == 0 && dest_y == 0 && dest_p == 1);
 	
 	// Send an empty packet to the remote to ping back
-	key = XYPD_TO_KEY(dest_x,dest_y,dest_p, working_dimension_order[dest_x][dest_y][dest_p]);
+	key = XYPD_TO_KEY(dest_x,dest_y,dest_p-1, working_dimension_order[dest_x][dest_y][dest_p-1]);
 	got_ping = FALSE;
 	spin1_send_mc_packet(key, PL_PING_BIT, TRUE);
 	send_time = tc2[TC_COUNT];

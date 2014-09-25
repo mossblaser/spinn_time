@@ -23,13 +23,14 @@ int drift = 0;
 int *result_log;
 uint result_count = 0;
 
+
 void
-on_master_mc_packet(uint key, uint payload)
+on_slave_mc_packet(uint key, uint payload)
 {
 	if (payload & PL_PING_BIT) {
 		// Respond to ping with the current time ASAP
 		uint time = tc2[TC_COUNT] + drift;
-		spin1_send_mc_packet(XYPD_TO_KEY(0,0,1,KEY_TO_D(key)), time, TRUE);
+		spin1_send_mc_packet(RETURN_KEY(key), time, TRUE);
 	} else {
 		// Apply correction from master
 		drift += PL_TO_CORRECTION(payload);
@@ -58,7 +59,7 @@ c_main() {
 	if (leadAp)
 		setup_routing_tables(my_x, my_y, CORES_PER_CHIP);
 	
-	spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 0);
+	spin1_callback_on(MCPL_PACKET_RECEIVED, on_slave_mc_packet, 0);
 	
 	tc2[TC_CONTROL] = TC_CONFIG;
 	
