@@ -6,6 +6,8 @@ A naive attempt to build a software clock sync'r.
 
 import random
 
+from math import sin, pi
+
 from collections import defaultdict
 
 # Simulation length in simulator ticks
@@ -22,6 +24,10 @@ slave_clock = 100
 # Periods of the master and slave hardware clocks
 master_period = 1.0
 slave_period = 0.90
+
+# Magnitude of wander on the slave clock
+wander_magnitude = 0.0003
+wander_period = 10000.0
 
 # Number of (raw) slave clock ticks between attempts to correct the clock
 slave_update_period = 500
@@ -50,10 +56,12 @@ last_phase_kick = 0
 correction_countdown = 0
 
 # The rate at which frequency corrections get applied
-avg_correction_freq_tc = 0.1
+avg_correction_freq_tc = 1.0
+avg_correction_freq_tc_target = 0.1
 
 # The rate at which phase corrections get applied
-avg_correction_phase_tc = 0.1
+avg_correction_phase_tc = 1.0
+avg_correction_phase_tc_target = 0.1
 
 # Link jitter (the standard-deviation of normally distributed noise added to
 # each error measurement)
@@ -69,9 +77,10 @@ event_queue[0.0].append(update_master)
 def update_slave(sim_time):
 	global event_queue, slave_clock, correction, offset, slave_update_countdown
 	global avg_correction_freq, correction_countdown, last_phase_kick
+	global avg_correction_freq_tc, avg_correction_phase_tc
 	
 	slave_clock += 1
-	event_queue[sim_time + slave_period].append(update_slave)
+	event_queue[sim_time + slave_period + sin((sim_time/wander_period) * 2*pi)*wander_magnitude].append(update_slave)
 	
 	# Apply corrections at the specified frequency
 	if avg_correction_freq != 0:
@@ -95,6 +104,12 @@ def update_slave(sim_time):
 		correction += avg_correction_phase_tc * phase_error
 		last_phase_kick = avg_correction_phase_tc * phase_error
 		avg_correction_freq += avg_correction_freq_tc * freq_error
+		
+		# Gradually ramp down the tc
+		if avg_correction_freq_tc > avg_correction_freq_tc_target:
+			avg_correction_freq_tc *= 0.9
+		if avg_correction_phase_tc > avg_correction_phase_tc_target:
+			avg_correction_phase_tc *= 0.9
 	
 	offset += correction
 event_queue[0.0].append(update_slave)
