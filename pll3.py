@@ -46,14 +46,18 @@ class Slave(object):
 	            , initial_time = 0
 	            , wander_magnitude = (1.0/200000000.0)*16.0*(30.0/1000000.0)
 	            , wander_period = 7.0 * 60.0
-	            , jitter_sd = 6.0
+	            , jitter_sd = 3.0
 	            , integer_bits = 32
 	            , correction_freq_fbits = 24
 	            , correction_phase_fbits = 24
 	              # Controller parameters
 	            , poll_period = int(5.76 / ((1.0/200000000.0)*16.0))//48
-	            , correction_freq_a = 0.1
-	            , correction_phase_a = 0.1
+	            , correction_freq_a = 0.05
+	            , correction_freq_anneal_start = 1.0
+	            , correction_freq_anneal_step = 0.1
+	            , correction_phase_a = 0.20
+	            , correction_phase_anneal_start = 1.0
+	            , correction_phase_anneal_step = 0.2
 	            ):
 		self.event_queue = event_queue
 		
@@ -91,15 +95,41 @@ class Slave(object):
 		self.correction_freq_fbits = correction_freq_fbits
 		
 		# The factor by which the exponential frequency average is updated with new
-		# correction_freq values. Converted to fixed point.
-		self.correction_freq_a = int(round(correction_freq_a * (1<<self.correction_freq_fbits)))
+		# correction_freq values. Converted to fixed point. Also includes a initial
+		# value which steps downwards towards the eventual target enabling fast
+		# adaption on system startup.
+		self.correction_freq_target = self.clamp(self.float_to_fixed(
+			correction_freq_a,
+			self.correction_freq_fbits
+		))
+		self.correction_freq_anneal_step = self.clamp(self.float_to_fixed(
+			correction_freq_anneal_step,
+			self.correction_freq_fbits
+		))
+		self.correction_freq_a = self.clamp(self.float_to_fixed(
+			max(correction_freq_a, correction_freq_anneal_start),
+			self.correction_freq_fbits
+		))
 		
 		# The fraction of the measured phase error to add to the correction upon an
 		# update. Accumulate fractional errors in phase but only apply corrections
-		# of integral amounts. (Fixed point)
+		# of integral amounts. (Fixed point) Also includes a initial value which
+		# stesp downward towards the eventual target enabling fast adaption on
+		# system startup.
 		self.correction_phase_fbits = correction_phase_fbits
-		self.correction_phase_a = int(round(correction_phase_a * (1<<self.correction_phase_fbits)))
 		self.fractional_phase_accumulator = 0
+		self.correction_phase_target = self.clamp(self.float_to_fixed(
+			correction_phase_a,
+			self.correction_phase_fbits
+		))
+		self.correction_phase_anneal_step = self.clamp(self.float_to_fixed(
+			correction_phase_anneal_step,
+			self.correction_phase_fbits
+		))
+		self.correction_phase_a = self.clamp(self.float_to_fixed(
+			max(correction_phase_a, correction_phase_anneal_start),
+			self.correction_phase_fbits
+		))
 		
 		# Every self.correction_period raw ticks, add self.correction to the offset.
 		self.correction_period = 0
@@ -125,6 +155,14 @@ class Slave(object):
 		if value < 0:
 			clamped |= (-1)<<self.integer_bits
 		return clamped
+	
+	
+	def float_to_fixed(self, value, fbits):
+		"""
+		Convert a float to a fixed point value with fbits fractional bits. This
+		function does not clamp the value.
+		"""
+		return int(round(value * (1<<fbits)))
 	
 	
 	@property
@@ -184,6 +222,23 @@ class Slave(object):
 			self.offset += integer_accumulator_value
 			self.offset = self.clamps(self.offset)
 			
+			# Step self.correction_freq_a and self.correction_phase_a down until they
+			# reach their target values.
+			if self.correction_freq_a > self.correction_freq_anneal_step:
+				self.correction_freq_a = self.clamp( self.correction_freq_a
+				                                   - self.correction_freq_anneal_step
+				                                   )
+			else:
+				self.correction_freq_a = 0
+			self.correction_freq_a = max(self.correction_freq_a, self.correction_freq_target)
+			
+			if self.correction_phase_a > self.correction_phase_anneal_step:
+				self.correction_phase_a = self.clamp( self.correction_phase_a
+				                                    - self.correction_phase_anneal_step
+				                                    )
+			else:
+				self.correction_phase_a = 0
+			self.correction_phase_a = max(self.correction_phase_a, self.correction_phase_target)
 			
 			# Reset the poll timer
 			self.time_since_last_poll = 0
