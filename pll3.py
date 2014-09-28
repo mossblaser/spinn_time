@@ -52,7 +52,7 @@ class Slave(object):
 	            , correction_phase_fbits = 24
 	              # Controller parameters
 	            , poll_period = int(5.76 / ((1.0/200000000.0)*16.0))//48
-	            , correction_freq_a = 0.05
+	            , correction_freq_a = 0.1
 	            , correction_freq_anneal_start = 1.0
 	            , correction_freq_anneal_step = 0.1
 	            , correction_phase_a = 0.20
@@ -131,11 +131,6 @@ class Slave(object):
 			self.correction_phase_fbits
 		))
 		
-		# Every self.correction_period raw ticks, add self.correction to the offset.
-		self.correction_period = 0
-		self.correction = 0
-		self.time_since_last_correction = 0
-		
 		# Schedule initial timer tick
 		self.event_queue[0.0].append(self.tick)
 	
@@ -170,7 +165,10 @@ class Slave(object):
 		"""
 		Current best guess at the true (master) time.
 		"""
-		return self.raw_time + self.offset
+		return self.clamp( self.raw_time
+		                 + self.offset
+		                 + (self.clamps(self.time_since_last_poll * self.correction_freq) >> self.correction_freq_fbits)
+		                 )
 	
 	
 	def tick(self, sim_time):
@@ -186,6 +184,11 @@ class Slave(object):
 			error += int(round(gauss(0.0, self.jitter_sd)))
 			error = self.clamps(error)
 			
+			# Bake the frequency offset into the accumulated offset since the
+			# frequency will be changed in this function.
+			self.offset += self.clamps(self.time_since_last_poll * self.correction_freq) >> self.correction_freq_fbits
+			self.offset = self.clamps(self.offset)
+			
 			# Making the assumptions that neither oscillator has shifted and there is
 			# no jitter in the error measurement, what is the frequency of
 			# single-count errors since the last poll? (Fixed point: note that
@@ -198,15 +201,6 @@ class Slave(object):
 			# Update the current frequency of corrections
 			self.correction_freq += freq
 			self.correction_freq = self.clamps(self.correction_freq)
-			
-			# Set (integer) period of corrections
-			if self.correction_freq != 0:
-				self.correction_period = self.clamps(  (1<<self.correction_freq_fbits)
-				                                    // self.clamps(abs(self.correction_freq))
-				                                    )
-				self.correction = 1 if self.correction_freq > 0 else -1
-			else:
-				self.correction = 0
 			
 			# Correct for the phase difference. Accumulate corrections in fixed point
 			# only applying corrections when integral ammounts exist. (Note that
@@ -242,14 +236,6 @@ class Slave(object):
 			
 			# Reset the poll timer
 			self.time_since_last_poll = 0
-		
-		
-		# Apply periodic corrections to compensate for incorrect frequency
-		self.time_since_last_correction += 1
-		if self.time_since_last_correction >= self.correction_period:
-			self.offset += self.correction
-			self.offset = self.clamps(self.offset)
-			self.time_since_last_correction = 0
 		
 		# Reschedule tick (including clock wander)
 		clock_period = self.clock_period \
