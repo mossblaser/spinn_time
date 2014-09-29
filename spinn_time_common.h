@@ -11,8 +11,8 @@
 #define NUM_CORRECTIONS 1000
 
 // Height of the (rectangular) system
-#define WIDTH  96
-#define HEIGHT 60
+#define WIDTH  30
+#define HEIGHT 8
 
 // Number of cores to use on each chip
 #define CORES_PER_CHIP 1
