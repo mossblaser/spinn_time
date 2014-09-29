@@ -11,14 +11,22 @@ corrections_plot <- ggplot(c, aes(x=time, y=correction, group=(x+(y*96)), color=
 	labs(x="Time (s)") +
 	labs(y="Correction applied (ticks)")
 
+
+dydx <- function(values) {
+	return(head(values, -1) - tail(values, -1));
+}
+
+
 c_sd <- aggregate(correction~x+y, c, sd)
 corrections_sd_plot <- ggplot(c_sd, aes(x=x,y=y,fill=correction)) +
 	geom_tile() +
 	labs("Correction variation for each chip") +
 	labs(fill="SD")
 
-c_mean <- aggregate(correction~x+y, c, sd)
-corrections_sd_plot <- ggplot(c_sd, aes(x=x,y=y,fill=correction)) +
+c_median <- aggregate(correction~x+y, c, median)
+corrections_median_plot <- ggplot(c_median, aes(x=x,y=y,fill=correction)) +
 	geom_tile() +
-	labs("Mean corrections for each chip") +
+	labs("Median corrections for each chip") +
 	labs(fill="Ticks")
+
+

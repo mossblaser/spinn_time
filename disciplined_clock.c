@@ -1,5 +1,8 @@
 #include "disciplined_clock.h"
 
+// XXX
+#include <spin1_api.h>
+
 #ifndef MIN
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
 #endif
@@ -29,9 +32,11 @@ dclk_get_time(dclk_state_t *state)
 	
 	// Work out the correction for frequency since the last frequency correction
 	dclk_time_t delta_raw_ticks = raw_time - state->last_update_time;
-	dclk_offset_t freq_correction = ( ((dclk_offset_t)delta_raw_ticks)
-	                                * state->correction_freq
-	                                ) >> DCLK_FP_FREQ_FBITS;
+	dclk_offset_t freq_correction = (dclk_offset_t)( ( ((dclk_dfp_freq_t)delta_raw_ticks)
+	                                                 * ((dclk_dfp_freq_t)state->correction_freq)
+	                                                 )
+	                                               >> DCLK_FP_FREQ_FBITS
+	                                               );
 	
 	// Apply any accumulated phase error while ensuring time monotonicity.
 	if (state->correction_phase_accumulator > 0) {
@@ -94,18 +99,30 @@ dclk_add_correction(dclk_state_t *state, dclk_offset_t correction)
 	// Update the offset to incorporate the frequency corrections since the last
 	// correction was added since the frequency correction may change after this
 	// update.
-	dclk_offset_t freq_correction = ( ((dclk_offset_t)time_since_last_poll)
-	                                * state->correction_freq
-	                                ) >> DCLK_FP_FREQ_FBITS;
+	dclk_offset_t freq_correction = (dclk_offset_t)( ( ((dclk_dfp_freq_t)time_since_last_poll)
+	                                                 * ((dclk_dfp_freq_t)state->correction_freq)
+	                                                 )
+	                                               >> DCLK_FP_FREQ_FBITS
+	                                               );
 	state->offset += freq_correction;
 	
 	// Making the assumptions that neither oscillator has shifted and there is no
 	// jitter in the correction measurement, what is the frequency of single-count
 	// errors since the last poll? Note that since only one fixed point number is
 	// involved, no shifting is required.
-	state->correction_freq += ( ((dclk_fp_freq_t)correction * state->freq_correction_weight)
-	                          / ((dclk_fp_freq_t)time_since_last_poll)
-	                          );
+	dclk_fp_freq_t correction_freq_adjustment = (dclk_fp_freq_t)
+	                                            ( ( ((dclk_dfp_freq_t)correction)
+	                                              * ((dclk_dfp_freq_t)state->freq_correction_weight)
+	                                              )
+	                                            / ((dclk_dfp_freq_t)time_since_last_poll)
+	                                            );
+	state->correction_freq += correction_freq_adjustment;
+	io_printf(IO_BUF, "FADJ: (%d * %d) / %d = %d\n"
+	         , correction
+	         , state->freq_correction_weight
+	         , time_since_last_poll
+	         , correction_freq_adjustment
+	         );
 	
 	// Accumulate phase corrections of a fraction of the correction. By only
 	// applying the corrections fractionally the effect of jitter is reduced at

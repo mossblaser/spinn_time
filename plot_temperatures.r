@@ -1,7 +1,7 @@
 require("ggplot2")
 require("gridExtra")
 
-t <- read.csv("temperatures.csv")
+t <- read.csv("/tmp/tmps")
 
 t_by_rack <- aggregate(.~rack+time, t, mean)
 

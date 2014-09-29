@@ -1,4 +1,7 @@
 app_load /tmp/spinn_time_slave.aplx all 1 16
+sleep 1
+app_sig 0.0.0.0 16 stop
+sleep 1
 app_load /tmp/spinn_time_master.aplx @0,0 1 16
-sleep 3
+sleep 2
 app_sig all 16 sync0

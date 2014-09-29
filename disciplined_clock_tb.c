@@ -23,7 +23,7 @@
 #define TWO_PI 6.2831853071795864769252866
 
 // Terminate after this time has elapsed
-#define SIM_DURATION 100
+#define SIM_DURATION 10000
 
 // Probability of printing a sample of the clock error
 #define SAMPLE_PROB 0.00001
@@ -37,7 +37,7 @@
 #define SLAVE_WANDER_MAGNITUDE ((1.0/200000000.0)*16.0*(30.0/1000000.0))
 
 // Period of the master clock at which corrections are sent
-#define POLL_PERIOD ((dclk_time_t)((5.76 / ((1.0/200000000.0)*16.0))/48))
+#define POLL_PERIOD ((dclk_time_t)((5.76 / ((1.0/200000000.0)*16.0))))
 
 // Jitter standard-deviation added to correction values
 #define JITTER_SD 3.0

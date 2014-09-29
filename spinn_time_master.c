@@ -38,6 +38,7 @@ volatile uint key;
 volatile int  last_error;
 volatile uint got_ping = TRUE;
 
+
 // Packet callback on master
 void
 on_master_mc_packet(uint return_key, uint remote_time)
@@ -47,10 +48,10 @@ on_master_mc_packet(uint return_key, uint remote_time)
 		return;
 	
 	// Calculate the approximate error in the remote clock
-	uint recv_time = tc2[TC_COUNT];
+	uint recv_time = TIMER_VALUE;
 	uint latency = (recv_time - send_time)/2;
 	remote_time += latency;
-	last_error = (((int)tc2[TC_COUNT]) - ((int)remote_time));
+	last_error = (((int)TIMER_VALUE) - ((int)remote_time));
 	got_ping = TRUE;
 	
 	// Send a correction back
@@ -63,12 +64,19 @@ on_tick(uint _1, uint _2)
 {
 	static uint num_responses = 0;
 	static uint num_missing = 0;
+	static uint num_scans = 0;
 	static int total_drift = 0;
 	
 	// Try a different DOR if a ping doesn't make it
 	if (!got_ping) {
 		working_dimension_order[dest_x][dest_y][dest_p-1] ++;
 		working_dimension_order[dest_x][dest_y][dest_p-1] %= NUM_DIM_ORDERS;
+		num_missing++;
+	} else if ((last_error > 1000 || last_error < -1000) && num_scans > 6) {
+		io_printf(IO_BUF, "%d,%d,%d has very large error %d.\n"
+		         , dest_x, dest_y, dest_p-1
+		         , last_error
+		         );
 		num_missing++;
 	} else {
 		num_responses++;
@@ -92,6 +100,7 @@ on_tick(uint _1, uint _2)
 					num_responses = 0;
 					num_missing = 0;
 					total_drift = 0;
+					num_scans++;
 				}
 			}
 		}
@@ -101,7 +110,7 @@ on_tick(uint _1, uint _2)
 	key = XYPD_TO_KEY(dest_x,dest_y,dest_p-1, working_dimension_order[dest_x][dest_y][dest_p-1]);
 	got_ping = FALSE;
 	spin1_send_mc_packet(key, PL_PING_BIT, TRUE);
-	send_time = tc2[TC_COUNT];
+	send_time = TIMER_VALUE;
 }
 
 

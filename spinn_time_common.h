@@ -11,8 +11,8 @@
 #define NUM_CORRECTIONS 1000
 
 // Height of the (rectangular) system
-#define WIDTH  30
-#define HEIGHT 8
+#define WIDTH  96
+#define HEIGHT 60
 
 // Number of cores to use on each chip
 #define CORES_PER_CHIP 1
@@ -26,6 +26,7 @@
 	                | (1 << 7) /* Enabled */ \
 	                )
 
+#define TIMER_VALUE (-tc2[TC_COUNT])
 
 // Defines a bit in the payload indicating a ping request
 #define PL_PING_BIT (1<<31)

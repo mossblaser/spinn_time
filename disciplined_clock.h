@@ -22,6 +22,11 @@ typedef  int32_t dclk_offset_t;
 typedef  int32_t dclk_fp_freq_t;
 typedef  int32_t dclk_fp_phase_t;
 
+// Double length fixed point numbers. These are used internally within
+// certain calculations to ensure appropriate range is available.
+typedef  int64_t dclk_dfp_freq_t;
+typedef  int64_t dclk_dfp_phase_t;
+
 /**
  * A structure which stores all persistent clock state. Not intended for public
  * access.
