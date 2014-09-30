@@ -1,8 +1,5 @@
 #include "disciplined_clock.h"
 
-// XXX
-#include <spin1_api.h>
-
 #ifndef MIN
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
 #endif
@@ -117,12 +114,6 @@ dclk_add_correction(dclk_state_t *state, dclk_offset_t correction)
 	                                            / ((dclk_dfp_freq_t)time_since_last_poll)
 	                                            );
 	state->correction_freq += correction_freq_adjustment;
-	io_printf(IO_BUF, "FADJ: (%d * %d) / %d = %d\n"
-	         , correction
-	         , state->freq_correction_weight
-	         , time_since_last_poll
-	         , correction_freq_adjustment
-	         );
 	
 	// Accumulate phase corrections of a fraction of the correction. By only
 	// applying the corrections fractionally the effect of jitter is reduced at
