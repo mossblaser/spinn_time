@@ -62,6 +62,55 @@ dclk_get_time(dclk_state_t *state)
 }
 
 
+dclk_time_t
+dclk_get_ticks_until_time(dclk_state_t *state, dclk_time_t target_time)
+{
+	// If the clock was perfect, how many ticks would we need to wait?
+	dclk_time_t cur_time = dclk_get_time(state);
+	dclk_offset_t delta_ticks = target_time - cur_time;
+	
+	// If the time was in the past don't wait (note that "in the past" here means
+	// more than half the timer range away since the timers can wrap).
+	if (delta_ticks <= 0)
+		return 0;
+	
+	// Given that the clock is really running at a different frequency, find out
+	// how many ticks will be added/removed due to frequency corrections (assuming
+	// the frequency correction rate remains constant over the period) and update
+	// our estimate.
+	//
+	// TODO: Could take advantage of knowing *when* frequency corrections are
+	// actually due to be applied (assuming freq doesn't change).
+	dclk_offset_t freq_correction = (dclk_offset_t)( ( ((dclk_dfp_freq_t)delta_ticks)
+	                                                 * ((dclk_dfp_freq_t)state->correction_freq)
+	                                                 )
+	                                               >> DCLK_FP_FREQ_FBITS
+	                                               );
+	delta_ticks += freq_correction;
+	
+	// How much phase error correction is (currently) due to be applied? Assume
+	// the phase error won't change and simply apply as much as possible in the
+	// given period.
+	dclk_offset_t phase_correction = 0;
+	if (state->correction_phase_accumulator > 0) {
+		// Positive, integral phase errors can be incorporated immediately without
+		// any impact on monotonicity. (Note that code should never be called since
+		// calling dclk_get_time will have already incorporated this.)
+		phase_correction = state->correction_phase_accumulator
+		                   >> DCLK_FP_PHASE_FBITS;
+	} else if (state->correction_phase_accumulator < 0) {
+		// Negative, integral phase errors can be incorporated only at the rate at
+		// which corrected time is expected to elapse (thus the phase correction can
+		// only at worst cancel out the difference in time).
+		phase_correction = -((state->correction_phase_accumulator >> DCLK_FP_PHASE_FBITS) + 1);
+		phase_correction = MIN(delta_ticks, phase_correction);
+	}
+	delta_ticks += phase_correction;
+	
+	return delta_ticks;
+}
+
+
 void
 dclk_correct_phase_now(dclk_state_t *state, dclk_offset_t correction)
 {

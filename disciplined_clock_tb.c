@@ -28,9 +28,12 @@
 // Probability of printing a sample of the clock error
 #define SAMPLE_PROB 0.00001
 
+// Number of master ticks forward to request the time
+#define TICKS_UNTIL_TIME_PERIOD 100000
+
 // Clock interval of the master and slave
 #define MASTER_TICK_PERIOD ((1.0/200000000.0)*16.0)
-#define SLAVE_TICK_PERIOD  ((1.0/200000000.0)*16.0*(1.0-(30.0/1000000.0)))
+#define SLAVE_TICK_PERIOD  ((1.0/200000000.0)*16.0*(1.0+(30.0/1000000.0)))
 
 // Sinusoidal clock wandering
 #define SLAVE_WANDER_PERIOD    (7.0*60.0)
@@ -92,7 +95,7 @@ main(int argc, char *argv[])
 	dclk_initialise_state(&dclk);
 	bool first_update = true;
 	
-	printf("#sim_time\tmaster\tslave\terror\tfreq_corr\tphase_corr\n");
+	printf("#sim_time\tmaster\tslave\terror\tfreq_corr\tphase_corr\tms_pred\n");
 	
 	while (sim_time < SIM_DURATION) {
 		sim_time = MIN(next_master_tick, next_slave_tick);
@@ -123,13 +126,14 @@ main(int argc, char *argv[])
 		if (((double)rand())/((double)RAND_MAX) < SAMPLE_PROB) {
 			dclk_time_t corrected_slave_time = dclk_get_time(&dclk);
 			dclk_offset_t error = master_time - corrected_slave_time;
-			printf( "%f\t%d\t%d\t%d\t%f\t%f\n" 
+			printf( "%f\t%d\t%d\t%d\t%f\t%f\t%d\n" 
 			      , sim_time // s
 			      , master_time * (5*16) // ns
 			      , corrected_slave_time * (5*16) // ns
 			      , error * (5*16) // ns
 			      , dclk.correction_freq / ((double)(1<<DCLK_FP_FREQ_FBITS)) // Hz
 			      , (dclk.correction_phase_accumulator * (5*16)) / ((double)(1<<DCLK_FP_PHASE_FBITS)) // ns
+			      , dclk_get_ticks_until_time(&dclk, dclk_get_time(&dclk) + TICKS_UNTIL_TIME_PERIOD) // ticks
 			      );
 		}
 	}

@@ -96,6 +96,20 @@ dclk_time_t dclk_get_time(dclk_state_t *state);
 
 
 /**
+ * Get the estimated number of raw ticks until a specified (corrected) timer
+ * value will be reached.
+ *
+ * This function can only produce estimates since it cannot account for future
+ * corrections which may slow down/speed up the clock. The estimate is based on
+ * the accumulated phase error and estimated frequency error.
+ *
+ * Note that if the specified time is in the past or in (unusual) cases where
+ * the clock has become badly out of phase, the function will return zero.
+ */
+dclk_time_t dclk_get_ticks_until_time(dclk_state_t *state, dclk_time_t time);
+
+
+/**
  * When the clock first starts it may suffer from a large phase offset from the
  * master clock and so this function can be used to violate clock monotonicity
  * and also bypass the clock discipline algorithm to initially set the clock.

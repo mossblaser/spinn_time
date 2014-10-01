@@ -37,6 +37,28 @@ dclk_read_raw_time(void)
 	return TIMER_VALUE;
 }
 
+// Flash the LEDs at a regular interval synchronised by the timer
+void
+on_slave_tick(uint _1, uint _2)
+{
+	// Work out when the next toggle will be
+	dclk_time_t now = dclk_get_time(&dclk);
+	now += 100;
+	dclk_time_t num_toggles = now / LED_TOGGLE_PERIOD;
+	dclk_time_t next_toggle = LED_TOGGLE_PERIOD * (num_toggles+1);
+	
+	// Schedule the next timer interrupt (making sure its at least one cycle in
+	// the future
+	dclk_offset_t next_toggle_raw_ticks = dclk_get_ticks_until_time(&dclk, next_toggle);
+	tc1[TC_LOAD] = MAX(next_toggle_raw_ticks, 1);
+	
+	// Set the LED state
+	spin1_led_control((num_toggles%2) ? LED_ON(0) : LED_OFF(0));
+	io_printf(IO_BUF, "LED %s\n", (num_toggles%2)?"on":"off");
+}
+
+
+// Discipline the clock based on corrections from the master
 void
 on_slave_mc_packet(uint key, uint payload)
 {
@@ -52,6 +74,20 @@ on_slave_mc_packet(uint key, uint payload)
 				dclk_add_correction(&dclk, PL_TO_CORRECTION(payload));
 			else
 				io_printf(IO_BUF, "The following correction was ignored:\n.");
+			
+			// Start the interrupts!
+			if (result_count == 1) {
+				tc1[TC_LOAD] = 0;
+				tc1[TC_CONTROL] = ( (1 << 0) /* One-shot counter */ \
+				                  | (1 << 1) /* 32-bit counter */ \
+				                  | (1 << 2) /* Clock divider (/1 = 0, /16 = 1, /256 = 2) */ \
+				                  | (1 << 5) /* Interrupt */ \
+				                  | (1 << 6) /* Periodic */ \
+				                  | (1 << 7) /* Enabled */ \
+				                  );
+				// Stop the monitor flashing the LEDs
+				sv->led_period = 0;
+			}
 		} else {
 			dclk_correct_phase_now(&dclk, PL_TO_CORRECTION(payload));
 		}
@@ -61,10 +97,11 @@ on_slave_mc_packet(uint key, uint payload)
 		         , KEY_TO_D(key)
 		         , dclk.correction_freq
 		         );
-		*(result_log++) = PL_TO_CORRECTION(payload);
+		if (NUM_CORRECTIONS != 0)
+			*(result_log++) = PL_TO_CORRECTION(payload);
 		
 		// Terminate after enough updates have ocurred
-		if (++result_count > NUM_CORRECTIONS)
+		if (++result_count > NUM_CORRECTIONS && (NUM_CORRECTIONS != 0))
 			spin1_exit(0);
 	}
 }
@@ -117,7 +154,7 @@ on_master_mc_packet(uint return_key, uint remote_time)
 
 // Send out pings and corrections to each slave
 void
-on_tick(uint _1, uint _2)
+on_master_tick(uint _1, uint _2)
 {
 	static uint num_responses = 0;
 	static uint num_missing = 0;
@@ -171,6 +208,11 @@ on_tick(uint _1, uint _2)
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+// Shared code
+////////////////////////////////////////////////////////////////////////////////
+
+
 void
 c_main() {
 	uint chip_id = spin1_get_chip_id();
@@ -193,6 +235,7 @@ c_main() {
 	tc2[TC_CONTROL] = TC_CONFIG;
 	
 	if (slave) {
+		spin1_callback_on(TIMER_TICK, on_slave_tick, 1);
 		spin1_callback_on(MCPL_PACKET_RECEIVED, on_slave_mc_packet, 0);
 		
 		result_log = (int *)(SDRAM_BASE_BUF);
@@ -202,7 +245,7 @@ c_main() {
 			result_log[i] = 0;
 	} else {
 		spin1_set_timer_tick(MASTER_TIMER_TICK);
-		spin1_callback_on(TIMER_TICK, on_tick, 0);
+		spin1_callback_on(TIMER_TICK, on_master_tick, 0);
 		spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 1);
 		
 		tc2[TC_CONTROL] = TC_CONFIG;
