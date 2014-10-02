@@ -10,6 +10,7 @@
 // XXX: Makefile is not very good...
 #include "dor.c"
 #include "disciplined_clock.c"
+#include "disciplined_timer.c"
 
 // The position of this chip in the system
 uint my_x = -1;
@@ -41,20 +42,14 @@ dclk_read_raw_time(void)
 void
 on_slave_tick(uint _1, uint _2)
 {
-	// Work out when the next toggle will be
-	dclk_time_t now = dclk_get_time(&dclk);
-	now += 100;
-	dclk_time_t num_toggles = now / LED_TOGGLE_PERIOD;
-	dclk_time_t next_toggle = LED_TOGGLE_PERIOD * (num_toggles+1);
-	
-	// Schedule the next timer interrupt (making sure its at least one cycle in
-	// the future
-	dclk_offset_t next_toggle_raw_ticks = dclk_get_ticks_until_time(&dclk, next_toggle);
-	tc1[TC_LOAD] = MAX(next_toggle_raw_ticks, 1);
+	spin1_led_control(LED_INV(0));
 	
 	// Set the LED state
+	dclk_time_t now = dtimer_schedule_next_interrupt();
+	dclk_time_t num_toggles = now / LED_TOGGLE_PERIOD_TICKS;
 	spin1_led_control((num_toggles%2) ? LED_ON(0) : LED_OFF(0));
-	io_printf(IO_BUF, "LED %s\n", (num_toggles%2)?"on":"off");
+	
+	now = dclk_get_time(&dclk);
 }
 
 
@@ -72,31 +67,26 @@ on_slave_mc_packet(uint key, uint payload)
 			// Sanity check
 			if (PL_TO_CORRECTION(payload) < 1000 && PL_TO_CORRECTION(payload) > -1000)
 				dclk_add_correction(&dclk, PL_TO_CORRECTION(payload));
-			else
-				io_printf(IO_BUF, "The following correction was ignored:\n.");
+			//else
+			//	io_printf(IO_BUF, "The following correction was ignored:\n.");
 			
 			// Start the interrupts!
 			if (result_count == 1) {
-				tc1[TC_LOAD] = 0;
-				tc1[TC_CONTROL] = ( (1 << 0) /* One-shot counter */ \
-				                  | (1 << 1) /* 32-bit counter */ \
-				                  | (1 << 2) /* Clock divider (/1 = 0, /16 = 1, /256 = 2) */ \
-				                  | (1 << 5) /* Interrupt */ \
-				                  | (1 << 6) /* Periodic */ \
-				                  | (1 << 7) /* Enabled */ \
-				                  );
-				// Stop the monitor flashing the LEDs
-				sv->led_period = 0;
+				// Start the timer
+				tc1[TC_CONTROL] &= ~(3 << 2);
+				tc1[TC_CONTROL] |= (TC_DIVIDER << 2);
+				dtimer_start_interrupts(&dclk, 8*(WIDTH*HEIGHT*MASTER_TIMER_TICK/TC_DIVIDER_VAL), LED_TOGGLE_PERIOD_TICKS);
 			}
 		} else {
 			dclk_correct_phase_now(&dclk, PL_TO_CORRECTION(payload));
 		}
 		
-		io_printf(IO_BUF, "Correction %d received via DOR %d. Corr Freq: 0x%08x\n"
-		         , PL_TO_CORRECTION(payload)
-		         , KEY_TO_D(key)
-		         , dclk.correction_freq
-		         );
+		//io_printf(IO_BUF, "Correction %d received via DOR %d. Corr Freq: 0x%08x. Prd Corrs: 0x%08x\n"
+		//         , PL_TO_CORRECTION(payload)
+		//         , KEY_TO_D(key)
+		//         , dclk.correction_freq
+		//         , dclk.correction_phase_accumulator
+		//         );
 		if (NUM_CORRECTIONS != 0)
 			*(result_log++) = PL_TO_CORRECTION(payload);
 		
@@ -109,9 +99,6 @@ on_slave_mc_packet(uint key, uint payload)
 ////////////////////////////////////////////////////////////////////////////////
 // Master-Specific Code
 ////////////////////////////////////////////////////////////////////////////////
-
-// Timer for master sending out requests (us)
-#define MASTER_TIMER_TICK 1000
 
 // A lookup table of dimension orders known to work with each remote core
 unsigned char working_dimension_order [WIDTH][HEIGHT][CORES_PER_CHIP];
@@ -133,6 +120,8 @@ volatile int  last_error;
 volatile uint got_ping = TRUE;
 
 
+
+
 // Packet callback on master
 void
 on_master_mc_packet(uint return_key, uint remote_time)
@@ -145,7 +134,7 @@ on_master_mc_packet(uint return_key, uint remote_time)
 	uint recv_time = TIMER_VALUE;
 	uint latency = (recv_time - send_time)/2;
 	remote_time += latency;
-	last_error = (((int)TIMER_VALUE) - ((int)remote_time));
+	last_error = (((int)recv_time) - ((int)remote_time));
 	got_ping = TRUE;
 	
 	// Send a correction back
@@ -161,16 +150,23 @@ on_master_tick(uint _1, uint _2)
 	static uint num_scans = 0;
 	static int total_drift = 0;
 	
+	static int first_run = TRUE;
+	if (first_run) {
+		// Reset the timer on the app start
+		tc2[TC_LOAD] = 0;
+		first_run = FALSE;
+	}
+	
 	// Try a different DOR if a ping doesn't make it
 	if (!got_ping) {
 		working_dimension_order[dest_x][dest_y][dest_p-1] ++;
 		working_dimension_order[dest_x][dest_y][dest_p-1] %= NUM_DIM_ORDERS;
 		num_missing++;
 	} else if ((last_error > 1000 || last_error < -1000) && num_scans > 6) {
-		io_printf(IO_BUF, "%d,%d,%d has very large error %d.\n"
-		         , dest_x, dest_y, dest_p-1
-		         , last_error
-		         );
+		//io_printf(IO_BUF, "%d,%d,%d has very large error %d.\n"
+		//         , dest_x, dest_y, dest_p-1
+		//         , last_error
+		//         );
 		num_missing++;
 	} else {
 		num_responses++;
@@ -186,15 +182,17 @@ on_master_tick(uint _1, uint _2)
 				if (++dest_p > CORES_PER_CHIP) {
 					dest_p = 1;
 					
-					io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d.\n"
-					         , num_responses
-					         , num_missing
-					         , total_drift
-					         );
+					//io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d @ %d.\n"
+					//         , num_responses
+					//         , num_missing
+					//         , total_drift
+					//         , TIMER_VALUE
+					//         );
 					num_responses = 0;
 					num_missing = 0;
 					total_drift = 0;
 					num_scans++;
+					spin1_led_control(LED_INV(0));
 				}
 			}
 		}
@@ -223,16 +221,13 @@ c_main() {
 	
 	dclk_initialise_state(&dclk);
 	
-	io_printf( IO_BUF, "Starting spinn_time at %d %d %d as %s...\n"
-	         , my_x, my_y, my_p
-	         , slave ? "slave" : "master"
-	         );
+	//io_printf( IO_BUF, "Starting spinn_time at %d %d %d as %s...\n"
+	//         , my_x, my_y, my_p
+	//         , slave ? "slave" : "master"
+	//         );
 	
 	if (leadAp)
 		setup_routing_tables(my_x, my_y, CORES_PER_CHIP);
-	
-	
-	tc2[TC_CONTROL] = TC_CONFIG;
 	
 	if (slave) {
 		spin1_callback_on(TIMER_TICK, on_slave_tick, 1);
@@ -245,10 +240,8 @@ c_main() {
 			result_log[i] = 0;
 	} else {
 		spin1_set_timer_tick(MASTER_TIMER_TICK);
-		spin1_callback_on(TIMER_TICK, on_master_tick, 0);
-		spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 1);
-		
-		tc2[TC_CONTROL] = TC_CONFIG;
+		spin1_callback_on(TIMER_TICK, on_master_tick, 1);
+		spin1_callback_on(MCPL_PACKET_RECEIVED, on_master_mc_packet, 0);
 		
 		// Initialise DOR lookup
 		for (int x = 0; x < WIDTH; x++)
@@ -259,6 +252,12 @@ c_main() {
 		// Remove any sentinel in SDRAM left by running the slave...
 		*((uint*)SDRAM_BASE_BUF) = 0;
 	}
+	
+	// Stop the monitors flashing the LEDs
+	sv->led_period = 0;
+	spin1_led_control(LED_OFF(0));
+	
+	tc2[TC_CONTROL] = TC_CONFIG;
 	
 	spin1_start(TRUE);
 }

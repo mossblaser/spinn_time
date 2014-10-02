@@ -61,7 +61,7 @@ typedef struct {
 
 
 // The number of fractional bits in a fixed point value representing a frequency
-#define DCLK_FP_FREQ_FBITS 24
+#define DCLK_FP_FREQ_FBITS 30
 
 // The number of fractional bits in a fixed point value representing a phase
 #define DCLK_FP_PHASE_FBITS 16
@@ -75,7 +75,7 @@ typedef struct {
 /**
  * Initialise a state structure.
  */
-void dclk_initialise_state(dclk_state_t *state);
+void dclk_initialise_state(volatile dclk_state_t *state);
 
 
 /**
@@ -92,7 +92,7 @@ dclk_time_t dclk_read_raw_time(void);
  * period of dclk_time_t). This guarantee is broken if dclk_correct_phase_now is
  * called.
  */
-dclk_time_t dclk_get_time(dclk_state_t *state);
+dclk_time_t dclk_get_time(volatile dclk_state_t *state);
 
 
 /**
@@ -106,7 +106,7 @@ dclk_time_t dclk_get_time(dclk_state_t *state);
  * Note that if the specified time is in the past or in (unusual) cases where
  * the clock has become badly out of phase, the function will return zero.
  */
-dclk_time_t dclk_get_ticks_until_time(dclk_state_t *state, dclk_time_t time);
+dclk_time_t dclk_get_ticks_until_time(volatile dclk_state_t *state, dclk_time_t time);
 
 
 /**
@@ -116,14 +116,14 @@ dclk_time_t dclk_get_ticks_until_time(dclk_state_t *state, dclk_time_t time);
  * This can avoid inducing large oscillations due to the initial error and allow
  * the clock to settle quicker.
  */
-void dclk_correct_phase_now(dclk_state_t *state, dclk_offset_t correction);
+void dclk_correct_phase_now(volatile dclk_state_t *state, dclk_offset_t correction);
 
 
 /**
  * Given a noisy correction from a remote clock, attempt to discipline the
  * clock.
  */
-void dclk_add_correction(dclk_state_t *state, dclk_offset_t correction);
+void dclk_add_correction(volatile dclk_state_t *state, dclk_offset_t correction);
 
 
 ////////////////////////////////////////////////////////////////////////////////

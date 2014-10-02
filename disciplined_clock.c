@@ -10,7 +10,7 @@
 
 
 void
-dclk_initialise_state(dclk_state_t *state)
+dclk_initialise_state(volatile dclk_state_t *state)
 {
 	state->last_update_time = dclk_read_raw_time();
 	state->last_corrected_time = dclk_read_raw_time();
@@ -23,7 +23,7 @@ dclk_initialise_state(dclk_state_t *state)
 
 
 dclk_time_t
-dclk_get_time(dclk_state_t *state)
+dclk_get_time(volatile dclk_state_t *state)
 {
 	dclk_time_t raw_time = dclk_read_raw_time();
 	
@@ -63,7 +63,7 @@ dclk_get_time(dclk_state_t *state)
 
 
 dclk_time_t
-dclk_get_ticks_until_time(dclk_state_t *state, dclk_time_t target_time)
+dclk_get_ticks_until_time(volatile dclk_state_t *state, dclk_time_t target_time)
 {
 	// If the clock was perfect, how many ticks would we need to wait?
 	dclk_time_t cur_time = dclk_get_time(state);
@@ -112,7 +112,7 @@ dclk_get_ticks_until_time(dclk_state_t *state, dclk_time_t target_time)
 
 
 void
-dclk_correct_phase_now(dclk_state_t *state, dclk_offset_t correction)
+dclk_correct_phase_now(volatile dclk_state_t *state, dclk_offset_t correction)
 {
 	// Apply the desired phase correction immediately
 	state->offset += correction;
@@ -132,7 +132,7 @@ dclk_correct_phase_now(dclk_state_t *state, dclk_offset_t correction)
 
 
 void
-dclk_add_correction(dclk_state_t *state, dclk_offset_t correction)
+dclk_add_correction(volatile dclk_state_t *state, dclk_offset_t correction)
 {
 	dclk_time_t raw_time = dclk_read_raw_time();
 	
