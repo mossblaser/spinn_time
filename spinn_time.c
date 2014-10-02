@@ -67,8 +67,10 @@ on_slave_mc_packet(uint key, uint payload)
 			// Sanity check
 			if (PL_TO_CORRECTION(payload) < 1000 && PL_TO_CORRECTION(payload) > -1000)
 				dclk_add_correction(&dclk, PL_TO_CORRECTION(payload));
-			//else
-			//	io_printf(IO_BUF, "The following correction was ignored:\n.");
+			#ifdef DEBUG_SLAVE
+			else
+				io_printf(IO_BUF, "The following correction was ignored:\n.");
+			#endif
 			
 			// Start the interrupts!
 			if (result_count == 1) {
@@ -81,12 +83,14 @@ on_slave_mc_packet(uint key, uint payload)
 			dclk_correct_phase_now(&dclk, PL_TO_CORRECTION(payload));
 		}
 		
-		//io_printf(IO_BUF, "Correction %d received via DOR %d. Corr Freq: 0x%08x. Prd Corrs: 0x%08x\n"
-		//         , PL_TO_CORRECTION(payload)
-		//         , KEY_TO_D(key)
-		//         , dclk.correction_freq
-		//         , dclk.correction_phase_accumulator
-		//         );
+		#ifdef DEBUG_SLAVE
+		io_printf(IO_BUF, "Correction %d received via DOR %d. Corr Freq: 0x%08x. Prd Corrs: 0x%08x\n"
+		         , PL_TO_CORRECTION(payload)
+		         , KEY_TO_D(key)
+		         , dclk.correction_freq
+		         , dclk.correction_phase_accumulator
+		         );
+		#endif
 		if (NUM_CORRECTIONS != 0)
 			*(result_log++) = PL_TO_CORRECTION(payload);
 		
@@ -163,10 +167,12 @@ on_master_tick(uint _1, uint _2)
 		working_dimension_order[dest_x][dest_y][dest_p-1] %= NUM_DIM_ORDERS;
 		num_missing++;
 	} else if ((last_error > 1000 || last_error < -1000) && num_scans > 6) {
-		//io_printf(IO_BUF, "%d,%d,%d has very large error %d.\n"
-		//         , dest_x, dest_y, dest_p-1
-		//         , last_error
-		//         );
+		#ifdef DEBUG_MASTER
+		io_printf(IO_BUF, "%d,%d,%d has very large error %d.\n"
+		         , dest_x, dest_y, dest_p-1
+		         , last_error
+		         );
+		#endif
 		num_missing++;
 	} else {
 		num_responses++;
@@ -182,12 +188,14 @@ on_master_tick(uint _1, uint _2)
 				if (++dest_p > CORES_PER_CHIP) {
 					dest_p = 1;
 					
-					//io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d @ %d.\n"
-					//         , num_responses
-					//         , num_missing
-					//         , total_drift
-					//         , TIMER_VALUE
-					//         );
+					#ifdef DEBUG_MASTER
+					io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d @ %d.\n"
+					         , num_responses
+					         , num_missing
+					         , total_drift
+					         , TIMER_VALUE
+					         );
+					#endif
 					num_responses = 0;
 					num_missing = 0;
 					total_drift = 0;
@@ -221,10 +229,10 @@ c_main() {
 	
 	dclk_initialise_state(&dclk);
 	
-	//io_printf( IO_BUF, "Starting spinn_time at %d %d %d as %s...\n"
-	//         , my_x, my_y, my_p
-	//         , slave ? "slave" : "master"
-	//         );
+	io_printf( IO_BUF, "Starting spinn_time at %d %d %d as %s...\n"
+	         , my_x, my_y, my_p
+	         , slave ? "slave" : "master"
+	         );
 	
 	if (leadAp)
 		setup_routing_tables(my_x, my_y, CORES_PER_CHIP);

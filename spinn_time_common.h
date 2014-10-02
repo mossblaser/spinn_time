@@ -8,17 +8,22 @@
 
 #include <spinnaker.h>
 
-// Number of clock updates to perform before exiting
+// Print diagnostic information
+#define DEBUG_MASTER
+//#define DEBUG_SLAVE
+
+// Number of clock updates to perform before exiting (or zero to run forever)
 #define NUM_CORRECTIONS 0
 
 // Height of the (rectangular) system
 #define WIDTH  12
 #define HEIGHT 12
 
-// The time it should take to cycle through cores (approx)
+// The period in us over which to send out a single correction to each core (approx)
 #define UPDATE_INTERVAL 10000000
 
-// Timer for master sending out requests (us)
+// Timer for master sending out requests (calculated from UPDATE_INTERVAL,
+// result in us)
 #define MASTER_TIMER_TICK (UPDATE_INTERVAL/(WIDTH*HEIGHT))
 
 // Number of cores to use on each chip
@@ -36,18 +41,20 @@
 
 // Configuration bits for synchronised timers
 #define TC_CONFIG ( (0 << 0)        /* Wrapping counter */ \
-	                | (1 << 1)        /* 32-bit counter */ \
-	                | (TC_DIVIDER<<2) /* Clock divider (/1 = 0, /16 = 1, /256 = 2) */ \
-	                | (0 << 5)        /* No interrupt */ \
-	                | (0 << 6)        /* Free-running */ \
-	                | (1 << 7)        /* Enabled */ \
-	                )
+                  | (1 << 1)        /* 32-bit counter */ \
+                  | (TC_DIVIDER<<2) /* Clock divider (/1 = 0, /16 = 1, /256 = 2) */ \
+                  | (0 << 5)        /* No interrupt */ \
+                  | (0 << 6)        /* Free-running */ \
+                  | (1 << 7)        /* Enabled */ \
+                  )
 
 
-// Period at which the LED should be toggled
+// Period at which the LED should be toggled (us)
 #define LED_TOGGLE_PERIOD_US 100
+// Covert the period into a number of clock ticks
 #define LED_TOGGLE_PERIOD_TICKS (((sv->cpu_clk) * (LED_TOGGLE_PERIOD_US)) / TC_DIVIDER_VAL)
 
+// Read the disciplined timer
 #define TIMER_VALUE (-tc2[TC_COUNT])
 
 // Defines a bit in the payload indicating a ping request
