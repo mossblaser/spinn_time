@@ -45,7 +45,7 @@
 
 
 // Period at which the LED should be toggled
-#define LED_TOGGLE_PERIOD_US 1000
+#define LED_TOGGLE_PERIOD_US 100
 #define LED_TOGGLE_PERIOD_TICKS (((sv->cpu_clk) * (LED_TOGGLE_PERIOD_US)) / TC_DIVIDER_VAL)
 
 #define TIMER_VALUE (-tc2[TC_COUNT])
