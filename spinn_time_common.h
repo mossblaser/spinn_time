@@ -16,7 +16,7 @@
 #define HEIGHT 12
 
 // The time it should take to cycle through cores (approx)
-#define UPDATE_INTERVAL 500000
+#define UPDATE_INTERVAL 10000000
 
 // Timer for master sending out requests (us)
 #define MASTER_TIMER_TICK (UPDATE_INTERVAL/(WIDTH*HEIGHT))
