@@ -145,12 +145,17 @@ dclk_add_correction(volatile dclk_state_t *state, dclk_offset_t correction)
 	// Update the offset to incorporate the frequency corrections since the last
 	// correction was added since the frequency correction may change after this
 	// update.
-	dclk_offset_t freq_correction = (dclk_offset_t)( ( ((dclk_dfp_freq_t)time_since_last_poll)
-	                                                 * ((dclk_dfp_freq_t)state->correction_freq)
-	                                                 )
-	                                               >> DCLK_FP_FREQ_FBITS
-	                                               );
-	state->offset += freq_correction;
+	dclk_dfp_freq_t freq_correction = ( ((dclk_dfp_freq_t)time_since_last_poll)
+	                                  * ((dclk_dfp_freq_t)state->correction_freq)
+	                                  );
+	state->offset += (dclk_offset_t)(freq_correction >> DCLK_FP_FREQ_FBITS);
+	
+	// Add the remaining fractional frequency correction to the phase correction
+	// accumulator.
+	state->correction_phase_accumulator
+		+= (dclk_fp_phase_t)(  (freq_correction & ((1ll<<DCLK_FP_FREQ_FBITS)-1))
+		                    >> (DCLK_FP_FREQ_FBITS-DCLK_FP_PHASE_FBITS)
+		                    );
 	
 	// Making the assumptions that neither oscillator has shifted and there is no
 	// jitter in the correction measurement, what is the frequency of single-count
