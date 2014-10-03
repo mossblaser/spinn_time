@@ -45,7 +45,27 @@ setup_routing_tables(uint my_x, uint my_y, uint cores_per_chip)
 		XY_TO_MIN_Z(my_x,my_y)
 	};
 	
-	// Add entries to accept packets destined for this core
+	// Add entries to multicast out nearest-neighbour messages from this chip
+	ADD_RTR_ENTRY( NEAREST_NEIGHBOUR_KEY(XY_TO_COLOUR(my_x,my_y), 0)
+	             , NEAREST_NEIGHBOUR_KEY(0xFF, 0)
+	             , EAST|NORTH|NORTH_EAST|WEST|SOUTH_WEST|SOUTH
+	             );
+	// Add entry to catch all incoming nearest neighbour messages (i.e. those with
+	// a different colour
+	for (int p = 1; p <= cores_per_chip; p++)
+		ADD_RTR_ENTRY( NEAREST_NEIGHBOUR_KEY(0, p-1)
+		             , NEAREST_NEIGHBOUR_KEY(0, 0xF)
+		             , CORE(p)
+		             );
+	
+	// Add entries to accept master<->slave packets destined for this core
+	for (int p = 1; p <= cores_per_chip; p++)
+		ADD_RTR_ENTRY( XYZPD_TO_KEY(xyz[0],xyz[1],xyz[2], p-1,0)
+		             , XYZPD_TO_KEY(  0xFF,  0xFF,  0xFF,0x0F,0)
+		             , CORE(p)
+		             );
+	
+	// Add entries to accept master<->slave packets destined for this core
 	for (int p = 1; p <= cores_per_chip; p++)
 		ADD_RTR_ENTRY( XYZPD_TO_KEY(xyz[0],xyz[1],xyz[2], p-1,0)
 		             , XYZPD_TO_KEY(  0xFF,  0xFF,  0xFF,0x0F,0)

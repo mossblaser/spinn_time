@@ -71,10 +71,10 @@ const uint DIM_DIRECTIONS[3] = {
 
 // Encode/decode the the fields of a routing key. The key is a bit field
 // containing a 3D hexagonal coordinate (x,y,z), a core number (p) and a
-// selected dimension ordering (d). Note that keys only exist for cores 0-15.
-// The final bit of the key is a "return" bit. If one, the key routes from
-// 0,0,0,1 to the specified core, if the bit is zero, the key routes from the
-// specified core to 0,0,0,1.
+// selected dimension ordering (d), 0-5. Note that keys only exist for cores
+// 0-15.  The final bit of the key is a "return" bit. If one, the key routes
+// from 0,0,0,1 to the specified core, if the bit is zero, the key routes from
+// the specified core to 0,0,0,1.
 #define XYZPD_TO_KEY(x,y,z,p,d) ( ((x)&0xFF)<<24 | ((y)&0xFF)<<16 | ((z)&0xFF)<<8 | ((p)&0xF)<<4 | ((d)&0x07)<<1 | 1<<0)
 #define KEY_TO_X(k) (((k) >> 24) & 0xFF)
 #define KEY_TO_Y(k) (((k) >> 16) & 0xFF)
@@ -88,6 +88,12 @@ const uint DIM_DIRECTIONS[3] = {
                                           , (p) \
                                           , (d) \
                                           ))
+
+// A key which broadcasts to the same core in neighbouring chips
+#define NEAREST_NEIGHBOUR_KEY(colour, p) (XYZPD_TO_KEY((colour),0,0,(p),7))
+
+// Convert the chip's X & Y coordinates into a colour
+#define XY_TO_COLOUR(x,y) (((x)+(y))%3)
 
 // Convert a key into the "return" version which routes back to 0,0,0,1
 #define RETURN_KEY(k) (k & ~0x1)

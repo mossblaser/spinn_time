@@ -16,7 +16,33 @@
 uint my_x = -1;
 uint my_y = -1;
 uint my_p = -1;
-uint slave = 0;
+
+////////////////////////////////////////////////////////////////////////////////
+// Traffic Generator Code
+////////////////////////////////////////////////////////////////////////////////
+
+
+void
+on_gen_tick(uint _1, uint _2)
+{
+	// Broadcast to nearest neighbours
+	spin1_send_mc_packet(NEAREST_NEIGHBOUR_KEY(XY_TO_COLOUR(my_x,my_y),my_p-1), 0, GEN_USE_PAYLOAD);
+	
+	// Cause the clock tick to vary randomly
+	spin1_set_timer_tick( GEN_TIMER_TICK
+	                    + ( spin1_rand()%(2*GEN_TIMER_NOISE_RANGE)
+	                      - GEN_TIMER_NOISE_RANGE
+	                      )
+	                    );
+}
+
+
+void
+on_gen_mc_packet(uint _1, uint _2)
+{
+	// Simply ignore the packet
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Slave-Specific Code
@@ -105,7 +131,7 @@ on_slave_mc_packet(uint key, uint payload)
 ////////////////////////////////////////////////////////////////////////////////
 
 // A lookup table of dimension orders known to work with each remote core
-unsigned char working_dimension_order [WIDTH][HEIGHT][CORES_PER_CHIP];
+unsigned char working_dimension_order [WIDTH][HEIGHT];
 
 // Last destination sent to (on master)
 uint dest_x = 0;
@@ -163,8 +189,8 @@ on_master_tick(uint _1, uint _2)
 	
 	// Try a different DOR if a ping doesn't make it
 	if (!got_ping) {
-		working_dimension_order[dest_x][dest_y][dest_p-1] ++;
-		working_dimension_order[dest_x][dest_y][dest_p-1] %= NUM_DIM_ORDERS;
+		working_dimension_order[dest_x][dest_y] ++;
+		working_dimension_order[dest_x][dest_y] %= NUM_DIM_ORDERS;
 		num_missing++;
 	} else if ((last_error > 1000 || last_error < -1000) && num_scans > 6) {
 		#ifdef DEBUG_MASTER
@@ -185,29 +211,26 @@ on_master_tick(uint _1, uint _2)
 			dest_x = 0;
 			if (++dest_y >= HEIGHT) {
 				dest_y = 0;
-				if (++dest_p > CORES_PER_CHIP) {
-					dest_p = 1;
 					
-					#ifdef DEBUG_MASTER
-					io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d @ %d.\n"
-					         , num_responses
-					         , num_missing
-					         , total_drift
-					         , TIMER_VALUE
-					         );
-					#endif
-					num_responses = 0;
-					num_missing = 0;
-					total_drift = 0;
-					num_scans++;
-					spin1_led_control(LED_INV(0));
-				}
+				#ifdef DEBUG_MASTER
+				io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d @ %d.\n"
+				         , num_responses
+				         , num_missing
+				         , total_drift
+				         , TIMER_VALUE
+				         );
+				#endif
+				num_responses = 0;
+				num_missing = 0;
+				total_drift = 0;
+				num_scans++;
+				spin1_led_control(LED_INV(0));
 			}
 		}
 	} while (dest_x == 0 && dest_y == 0 && dest_p == 1);
 	
 	// Send an empty packet to the remote to ping back
-	key = XYPD_TO_KEY(dest_x,dest_y,dest_p-1, working_dimension_order[dest_x][dest_y][dest_p-1]);
+	key = XYPD_TO_KEY(dest_x,dest_y,dest_p-1, working_dimension_order[dest_x][dest_y]);
 	got_ping = FALSE;
 	spin1_send_mc_packet(key, PL_PING_BIT, TRUE);
 	send_time = TIMER_VALUE;
@@ -225,7 +248,9 @@ c_main() {
 	my_x = (chip_id >> 8) & 0xFF;
 	my_y = chip_id & 0xFF;
 	my_p = spin1_get_core_id();
-	slave = !((my_x==0) && (my_y==0) && (my_p==1));
+	
+	uint slave = !((my_x==0) && (my_y==0) && (my_p==1));
+	uint traffic_gen = my_p!=1;
 	
 	dclk_initialise_state(&dclk);
 	
@@ -237,7 +262,12 @@ c_main() {
 	if (leadAp)
 		setup_routing_tables(my_x, my_y, CORES_PER_CHIP);
 	
-	if (slave) {
+	if (traffic_gen) {
+		spin1_set_timer_tick(GEN_TIMER_TICK);
+		spin1_callback_on(TIMER_TICK, on_gen_tick, 1);
+		spin1_callback_on(MCPL_PACKET_RECEIVED, on_gen_mc_packet, 0);
+		spin1_callback_on(MC_PACKET_RECEIVED,   on_gen_mc_packet, 0);
+	} else if (slave) {
 		spin1_callback_on(TIMER_TICK, on_slave_tick, 1);
 		spin1_callback_on(MCPL_PACKET_RECEIVED, on_slave_mc_packet, 0);
 		
@@ -254,8 +284,7 @@ c_main() {
 		// Initialise DOR lookup
 		for (int x = 0; x < WIDTH; x++)
 			for (int y = 0; y < HEIGHT; y++)
-				for (int p = 0; y < CORES_PER_CHIP; y++)
-					working_dimension_order[x][y][p] = DIM_ORDER_XYZ;
+				working_dimension_order[x][y] = DIM_ORDER_XYZ;
 		
 		// Remove any sentinel in SDRAM left by running the slave...
 		*((uint*)SDRAM_BASE_BUF) = 0;

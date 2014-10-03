@@ -22,12 +22,19 @@
 // The period in us over which to send out a single correction to each core (approx)
 #define UPDATE_INTERVAL 10000000
 
+// Should the packet generator produce packets with paylods?
+#define GEN_USE_PAYLOAD FALSE
+
+// The timer tick at which multicast packets are unleashed in packet generators
+#define GEN_TIMER_TICK 100
+#define GEN_TIMER_NOISE_RANGE 10
+
 // Timer for master sending out requests (calculated from UPDATE_INTERVAL,
 // result in us)
 #define MASTER_TIMER_TICK (UPDATE_INTERVAL/(WIDTH*HEIGHT))
 
 // Number of cores to use on each chip
-#define CORES_PER_CHIP 1
+#define CORES_PER_CHIP 16
 
 // Clock divider setting to use (/1 = 0, /16 = 1, /256 = 2)
 #define TC_DIVIDER 1
