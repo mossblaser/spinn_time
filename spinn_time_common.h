@@ -20,13 +20,19 @@
 #define HEIGHT 12
 
 // The period in us over which to send out a single correction to each core (approx)
-#define UPDATE_INTERVAL 10000000
+#define UPDATE_INTERVAL 1000000
 
 // Should the packet generator produce packets with paylods?
 #define GEN_USE_PAYLOAD FALSE
 
+// Number of packets to generate per timer tick
+#define GEN_PACKETS_PER_SEC 1000
+
 // The timer tick at which multicast packets are unleashed in packet generators
-#define GEN_TIMER_TICK 100
+// (zero if not to generate packets)
+#define GEN_TIMER_TICK ((GEN_PACKETS_PER_SEC) ? (1000000/GEN_PACKETS_PER_SEC) : 0)
+
+// Range of uniform random noise in timer period
 #define GEN_TIMER_NOISE_RANGE 10
 
 // Timer for master sending out requests (calculated from UPDATE_INTERVAL,

@@ -1,3 +1,4 @@
+app_stop 16
 app_load /tmp/spinn_time.aplx all 1-16 16
 sleep 2
 app_sig all 16 sync0

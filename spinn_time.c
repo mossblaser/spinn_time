@@ -29,11 +29,15 @@ on_gen_tick(uint _1, uint _2)
 	spin1_send_mc_packet(NEAREST_NEIGHBOUR_KEY(XY_TO_COLOUR(my_x,my_y),my_p-1), 0, GEN_USE_PAYLOAD);
 	
 	// Cause the clock tick to vary randomly
-	spin1_set_timer_tick( GEN_TIMER_TICK
-	                    + ( spin1_rand()%(2*GEN_TIMER_NOISE_RANGE)
-	                      - GEN_TIMER_NOISE_RANGE
-	                      )
-	                    );
+	int tick_period = GEN_TIMER_TICK
+	                + ( spin1_rand()%(2*GEN_TIMER_NOISE_RANGE)
+	                  - GEN_TIMER_NOISE_RANGE
+	                  )
+	                ;
+	if (tick_period > 0)
+		spin1_set_timer_tick(tick_period);
+	else
+		spin1_set_timer_tick(1);
 }
 
 
@@ -103,7 +107,16 @@ on_slave_mc_packet(uint key, uint payload)
 				// Start the timer
 				tc1[TC_CONTROL] &= ~(3 << 2);
 				tc1[TC_CONTROL] |= (TC_DIVIDER << 2);
-				dtimer_start_interrupts(&dclk, 8*(WIDTH*HEIGHT*MASTER_TIMER_TICK/TC_DIVIDER_VAL), LED_TOGGLE_PERIOD_TICKS);
+				
+				// Start the LEDs all at the same moment after everyone is due to have
+				// started up (after they have all definately receved two corrections).
+				// Assumes the first dimension order route is appropriate.
+				uint startup_time = 2.5*(WIDTH*HEIGHT*MASTER_TIMER_TICK*sv->cpu_clk/TC_DIVIDER_VAL);
+				dtimer_start_interrupts(&dclk, startup_time, LED_TOGGLE_PERIOD_TICKS);
+				io_printf(IO_BUF, "Starting interrupts at %d (cur time %d).\n"
+				         , startup_time
+				         , dclk_get_time(&dclk)
+				         );
 			}
 		} else {
 			dclk_correct_phase_now(&dclk, PL_TO_CORRECTION(payload));
@@ -213,7 +226,8 @@ on_master_tick(uint _1, uint _2)
 				dest_y = 0;
 					
 				#ifdef DEBUG_MASTER
-				io_printf( IO_BUF, "Full scan complete, %d updated, %d not responding, total drift = %d @ %d.\n"
+				io_printf( IO_BUF, "Full scan complete at %d, %d updated, %d not responding, total drift = %d @ %d.\n"
+				         , dclk_read_raw_time()
 				         , num_responses
 				         , num_missing
 				         , total_drift
@@ -263,7 +277,8 @@ c_main() {
 		setup_routing_tables(my_x, my_y, CORES_PER_CHIP);
 	
 	if (traffic_gen) {
-		spin1_set_timer_tick(GEN_TIMER_TICK);
+		if (GEN_TIMER_TICK)
+			spin1_set_timer_tick(GEN_TIMER_TICK);
 		spin1_callback_on(TIMER_TICK, on_gen_tick, 1);
 		spin1_callback_on(MCPL_PACKET_RECEIVED, on_gen_mc_packet, 0);
 		spin1_callback_on(MC_PACKET_RECEIVED,   on_gen_mc_packet, 0);
@@ -292,9 +307,10 @@ c_main() {
 	
 	// Stop the monitors flashing the LEDs
 	sv->led_period = 0;
-	spin1_led_control(LED_OFF(0));
+	spin1_led_control(LED_ON(0));
 	
 	tc2[TC_CONTROL] = TC_CONFIG;
+	tc2[TC_LOAD] = 0;
 	
 	spin1_start(TRUE);
 }

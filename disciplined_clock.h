@@ -135,15 +135,15 @@ void dclk_add_correction(volatile dclk_state_t *state, dclk_offset_t correction)
 // DCLK_FREQ_CORRECTION_WEIGHT_TARGET in steps of
 // DCLK_FREQ_CORRECTION_WEIGHT_STEP. This allows the system to quickly lock on
 // to roughly the right frequency and then later filter out noise.
-#define DCLK_FREQ_CORRECTION_WEIGHT_TARGET DCLK_DOUBLE_TO_FP_FREQ(0.1)
+#define DCLK_FREQ_CORRECTION_WEIGHT_TARGET DCLK_DOUBLE_TO_FP_FREQ(0.05)
 #define DCLK_FREQ_CORRECTION_WEIGHT_START  DCLK_DOUBLE_TO_FP_FREQ(1.0)
-#define DCLK_FREQ_CORRECTION_WEIGHT_STEP   DCLK_DOUBLE_TO_FP_FREQ(0.05)
+#define DCLK_FREQ_CORRECTION_WEIGHT_STEP   DCLK_DOUBLE_TO_FP_FREQ(0.10)
 
 // The weight with which phase updates are applied. This is ramped down from
 // DCLK_PHASE_CORRECTION_WEIGHT_START to DCLK_PHASE_CORRECTION_WEIGHT_TARGET in
 // steps of DCLK_PHASE_CORRECTION_WEIGHT_STEP. This allows the system to quickly
 // lock on to roughly the right time and then later filter out noise.
-#define DCLK_PHASE_CORRECTION_WEIGHT_TARGET DCLK_DOUBLE_TO_FP_PHASE(0.2)
+#define DCLK_PHASE_CORRECTION_WEIGHT_TARGET DCLK_DOUBLE_TO_FP_PHASE(0.1)
 #define DCLK_PHASE_CORRECTION_WEIGHT_START  DCLK_DOUBLE_TO_FP_PHASE(1.0)
 #define DCLK_PHASE_CORRECTION_WEIGHT_STEP   DCLK_DOUBLE_TO_FP_PHASE(0.2)
 
