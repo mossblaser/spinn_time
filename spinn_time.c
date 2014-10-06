@@ -113,10 +113,12 @@ on_slave_mc_packet(uint key, uint payload)
 				// Assumes the first dimension order route is appropriate.
 				uint startup_time = 2.5*(WIDTH*HEIGHT*MASTER_TIMER_TICK*sv->cpu_clk/TC_DIVIDER_VAL);
 				dtimer_start_interrupts(&dclk, startup_time, LED_TOGGLE_PERIOD_TICKS);
+				#ifdef DEBUG_SLAVE
 				io_printf(IO_BUF, "Starting interrupts at %d (cur time %d).\n"
 				         , startup_time
 				         , dclk_get_time(&dclk)
 				         );
+				#endif
 			}
 		} else {
 			dclk_correct_phase_now(&dclk, PL_TO_CORRECTION(payload));
